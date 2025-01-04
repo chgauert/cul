@@ -79,6 +79,9 @@ cul.on('data', function (raw) {
     the port of the telnet server
 * **networkTimeout** (default: ```true```)  
     enabling sending keep alive signals to the telnet server
+* **culStackLevel** (default: ```0```)      
+    the stack-level for mapleCUL / stacked CUL's
+    
 
 pass options when creating a new cul object:
 ```javascript
