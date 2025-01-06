@@ -79,8 +79,8 @@ cul.on('data', function (raw) {
     the port of the telnet server
 * **networkTimeout** (default: ```true```)  
     enabling sending keep alive signals to the telnet server
-* **culStackLevel** (default: ```0```)      
-    the stack-level for mapleCUL / stacked CUL's
+* **transmitterList** (default: ```[1]```)      
+    array of transmitters used, 1 = default transmitter, 2 or more when stacked transmitter is used
     
 
 pass options when creating a new cul object:
@@ -132,7 +132,7 @@ cul.write('F6C480111'); // Raw command
 ```
 ### Predefined commands
 
-(until now only FS20 and FHT is implemented)
+(until now only IT (Intertechno), FS20 and FHT is implemented)
 
 #### FS20
 
@@ -145,6 +145,16 @@ cul.cmd('FS20', '6C48', '01', '11');        // house code as hex string, address
 ```
 (these examples result in the same message as the raw command example above.)
 
+#### IT
+
+Take a look at the file lib/it.js - it exports a function cmd(code, address, command, dimLevel)
+( Parameter code is not used )
+
+example
+```javascript
+cul.cmd('IT', '1101100000101000000000000000010', '1');
+```
+
 
 ## Data parsing
 
@@ -153,7 +163,7 @@ The 2nd param ```obj``` of the data event contains a object representation of th
 Each object has the following attributes:
 
 * **protocol**    
-FS20, EM, HMS, WS, MORITZ, ...
+FS20, EM, HMS, WS, MORITZ, IT, ...
 * **address**    
 a unique address in this protocol
 * **device**  
@@ -192,6 +202,26 @@ F6C480011E5, {
         cmdRaw: '11',
         cmd: 'on'
 
+    }
+}
+```
+
+#### IT
+```
+iA69559955555565946, {
+    protocol: 'IT',
+    address: '1101100000101000000000000000010',
+    device: 'InterTechno',
+    version: 'V3',
+    rssi: -39,
+    data: {
+        unitId: '11011000001010000000000000',
+        command   : '1',
+        housecode : '',
+        groupBit  : '0',
+        channelId : '0010',
+        dimLevel  : '',
+        transmitter: 2
     }
 }
 ```

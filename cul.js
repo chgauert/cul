@@ -26,7 +26,19 @@ const protocol = {
     fht: require('./lib/fht.js'),
     esa: require('./lib/esa.js')
 };
-
+/*
+const protocol = {
+    em: require('/data/dev/cul/lib/em.js'),
+    fs20: require('/data/dev/cul/lib/fs20.js'),
+    hms: require('/data/dev/cul/lib/hms.js'),
+    it: require('/data/dev/cul/lib/it.js'),
+    moritz: require('/data/dev/cul/lib/moritz.js'),
+    uniroll: require('/data/dev/cul/lib/uniroll.js'),
+    ws: require('/data/dev/cul/lib/ws.js'),
+    fht: require('/data/dev/cul/lib/fht.js'),
+    esa: require('/data/dev/cul/lib/esa.js')
+};
+*/
 // http://culfw.de/commandref.html
 const commands = {
     F: 'FS20',
@@ -42,7 +54,7 @@ const commands = {
     o: 'Obis',
     t: 'TX',
     U: 'Uniroll',
-    i: 'InterTechno'
+    i: 'IT',
     K: 'WS'
 };
 
@@ -74,7 +86,7 @@ const Cul = function (options) {
     options.connectionMode = options.connectionMode || 'serial';
     options.networkTimeout = options.networkTimeout || true;
     options.logger = options.logger || console.log;
-    options.culStackLevel = options.culStackLevel || 0;
+    options.transmitterList = options.transmitterList || [1];
 
     if (options.coc) {
         options.baudrate = options.baudrate || 38400;
@@ -108,23 +120,25 @@ const Cul = function (options) {
 
     // Serial connection
     if (options.connectionMode === 'serial') {
-        const SerialPort = require('serialport');
-        const {Readline} = SerialPort.parsers;
-        const parser = new Readline({
-            delimiter: '\r\n'
-        });
-        const spOptions = {
-            baudRate: options.baudrate
-        };
-        const serialPort = new SerialPort(options.serialport, spOptions);
+
+        const { SerialPort } = require('serialport');
+        const { ReadlineParser } = require('@serialport/parser-readline')
+
+        const parser = new ReadlineParser({ delimiter: '\r\n' });
+
+        const serialPort = new SerialPort({path: options.serialport, 
+                                           baudRate: Number(options.baudrate),
+                                           lock: false});
+
         serialPort.pipe(parser);
+
         this.close = function (callback) {
             if (!serialPort.isOpen) {
                 return;
             }
 
             if (options.init && stopCmd) {
-                that.write(stopCmd, () => {
+                that.write(stopCmd, 0, () => {
                     serialPort.close(callback);
                 });
             } else {
@@ -139,14 +153,14 @@ const Cul = function (options) {
         serialPort.on('open', () => {
             if (options.init) {
                 setTimeout(() => { // Give CUL enough time to wakeup
-                    that.write(options.initCmd, err => {
+                    that.write(options.initCmd, 1, err => {
                         if (err) {
                             that.emit('error', err);
                         }
                     });
                     serialPort.drain(() => {
                         if (modeCmd) {
-                            that.write(modeCmd, err => {
+                            that.write(modeCmd, 1, err => {
                                 if (err) {
                                     that.emit('error', err);
                                 }
@@ -159,12 +173,25 @@ const Cul = function (options) {
                                 }
                             });
                         } else {
+                            initStackedCULs();
                             ready();
                         }
                     });
                 }, 2000);
             } else {
                 ready();
+            }
+
+            function initStackedCULs() {
+                for(let Index=1; Index < options.transmitterList.length; Index++) {
+                    let culNo = options.transmitterList[Index];
+
+                    that.write(options.initCmd, culNo, err => {
+                        if (err) {
+                            that.emit('error', err);
+                        }
+                    });
+                }
             }
 
             function ready() {
@@ -177,16 +204,20 @@ const Cul = function (options) {
             that.emit('error', ex);
         });
 
-        this.write = function (data, callback) {
+        this.write = function (data, transmitterNo, callback) {
             if (options.debug) {
-                options.logger('CUL StackLevel ->', options.culStackLevel);
-                options.logger('->', data);
+                options.logger('transmitter number -> ' + transmitterNo);
+                options.logger('data ->' + data);
             }
 
-            if(options.culStackLevel == 0) {
+            if(transmitterNo === 1) {
                 serialPort.write(data + '\r\n');
             } else {
-                serialPort.write('*' + data + '\r\n');
+
+                let stackPrefix = getStackPrefix(transmitterNo);
+                let stackedData = stackPrefix + data;
+                options.logger('stackedData ->' + stackedData);
+                serialPort.write(stackedData + '\r\n');
             }
 
             serialPort.drain(callback);
@@ -257,9 +288,9 @@ const Cul = function (options) {
             that.emit('error', ex);
         });
 
-        this.write = function (data, callback) {
+        this.write = function (data, dummy, callback) {
             if (options.debug) {
-                options.logger('->', data);
+                options.logger('->' + data);
             }
 
             telnet.write(data + '\r\n');
@@ -275,9 +306,16 @@ const Cul = function (options) {
 
     this.cmd = function () {
         let args = Array.prototype.slice.call(arguments);
-        let callback;
+
+        let callback;        
         if (typeof args[args.length - 1] === 'function') {
             callback = args.pop();
+        }
+
+        let transmitter = 1;
+        if (typeof args[args.length - 1] === 'object') {
+            let argObject = args.pop();
+            transmitter = argObject.transmitter;
         }
 
         let c = args[0].toLowerCase();
@@ -290,7 +328,7 @@ const Cul = function (options) {
         if (protocol[c] && typeof protocol[c].cmd === 'function') {
             const message = protocol[c].cmd.apply(null, args);
             if (message) {
-                that.write(message, callback);
+                that.write(message, transmitter ,callback);
                 return true;
             }
 
@@ -320,10 +358,13 @@ const Cul = function (options) {
         let p;
         let rssi;
         let dataRaw;
+        let transmitterNumber = 1;
 
         if (options.parse) {
-            if (options.culStackLevel > 0) {
-                data = data.toString().slice(options.culStackLevel-1);        // remove leading *
+            if (options.transmitterList.length > 1) {
+
+                transmitterNumber = getTransmitterNumber(data);
+                data = data.slice(transmitterNumber-1);        // remove leading *
             }
 
             if (options.rssi) {
@@ -339,6 +380,8 @@ const Cul = function (options) {
                 p = commands[command].toLowerCase();
                 if (protocol[p] && typeof protocol[p].parse === 'function') {
                     message = protocol[p].parse(dataRaw);
+
+                    message.data.transmitter = transmitterNumber;
                 }
             }
 
@@ -349,6 +392,28 @@ const Cul = function (options) {
         }
 
         that.emit('data', data, message);
+    }
+
+    function getStackPrefix(transmitterNo) {
+        switch(transmitterNo) {
+            case 2: return '*';
+            case 3: return '**';
+            case 4: return '***';
+            default: return '';
+        }
+    }
+
+    function getTransmitterNumber(data) {
+        let number = 1;
+
+        for(let i = 0; i < data.length; i++) {
+            if(data[i] === '*') {
+                number++;
+            }
+            else
+                return number;
+        }
+        return number;
     }
 
     return this;

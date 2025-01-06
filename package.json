@@ -1,5 +1,5 @@
 {
-  "version": "0.17.0",
+  "version": "0.18.0",
   "name": "cul",
   "description": "Module to interact with Busware CUL / culfw",
   "homepage": "http://github.com/hobbyquaker/cul",
@@ -28,12 +28,13 @@
     "Michael Lorenz",
     "mreschka https://github.com/mreschka",
     "Andre Klärner https://github.com/klaernie",
-    "Ferdinand Helmer https://github.com/ferdinandhelmer"
+    "Ferdinand Helmer https://github.com/ferdinandhelmer",
+    "chg https://github.com/chgauert/"
   ],
   "repository": "https://github.com/hobbyquaker/cul",
   "main": "./cul.js",
   "dependencies": {
-    "serialport": "^9.0.0",
+    "serialport": "^13.0.0",
     "telnet-client": "^1.4.5"
   },
   "bugs": {
