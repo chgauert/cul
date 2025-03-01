@@ -375,13 +375,17 @@ const Cul = function (options) {
 
             command = dataRaw[0];
 
+            options.logger('dataRaw ->' + dataRaw);
+
             message = {};
             if (commands[command]) {
                 p = commands[command].toLowerCase();
                 if (protocol[p] && typeof protocol[p].parse === 'function') {
                     message = protocol[p].parse(dataRaw);
 
-                    message.data.transmitter = transmitterNumber;
+                    if(message && message.data) {
+                        message.data.transmitter = transmitterNumber;
+                    }
                 }
             }
 
